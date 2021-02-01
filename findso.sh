@@ -1,20 +1,15 @@
+###
+ # @Author: your name
+ # @Date: 2020-08-28 12:11:37
+ # @LastEditTime: 2020-09-11 03:36:02
+ # @LastEditors: Please set LastEditors
+ # @Description: In User Settings Edit
+ # @FilePath: /AiFrameWork/workspace/findso.sh
+###
 
 so_db_dir=all_db_dir
 so_dest_dir=dest_dir
-copy_2_dest=true
-so_or_exectuable_path=frame_test
-
-find_real_file_full_name(){ #输入一个符号链接绝对路径，输出真实文件全路径
-    a=$1
-    while [ -h $a ]
-    do
-
-    b=`ls -ld $a|awk '{print $NF}'`
-    c=`ls -ld $a|awk '{print $(NF-2)}'`
-    [[ $b =~ ^/ ]] && a=$b  || a=`dirname $c`/$b
-    done
-    echo $a
-}
+so_or_exectuable_path=cpp_test
 
 # 首次正常依赖库文件提取(含软连接)
 copy_all_so_2_db(){
@@ -26,17 +21,23 @@ copy_all_so_2_db(){
     so_data=`ldd $so_or_exectuable_path | egrep "\/" | awk '{print $3}'`
     for line in $so_data
     do
-        if [ -h $line ]
+        if [ -L $line ]
         then
             # echo ${line//\//,} 所有的/替换为,
-            # old_path=${line%$(basename ${line})} #提取原文件的路径，不包含文件名,最后带/
+            # old_path=${line%$(basename ${line})} #提取原文件的路径，不包含文件名,最后带/; 也可用dirname　文件所在目录
 
-            real_full_name=$(find_real_file_full_name $line)
-
+            real_full_name=`readlink -f $line`
+            echo $real_full_name
             echo "cp file $real_full_name to $so_db_dir"
             cp $real_full_name $so_db_dir
             echo "cp link $line to $so_db_dir"
             cp -d $line $so_db_dir
+
+            # link_file_name=$so_db_dir/${line##*/} 方法一
+            link_file_name=$so_db_dir/$(basename $line) #方法二
+            real_file_name=$(basename $real_full_name)
+            rm $link_file_name
+            ln -s $real_file_name $link_file_name #重新建立软链接
         else
             cp $line $so_db_dir
         fi
@@ -50,7 +51,7 @@ copy_need_2_dest(){
     then
         mkdir $so_dest_dir
     fi
-    export LD_LIBRARY_PATH=$so_dest_dir
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$so_dest_dir
 
     while :
     do
@@ -58,11 +59,11 @@ copy_need_2_dest(){
         num=0
         for line in $so_data
         do
-            let num++
+            num=1
             src_file=$so_db_dir/$line
-            if [ -h $src_file ]
+            if [ -L $src_file ]
             then
-                real_full_name=$(find_real_file_full_name $src_file)
+                real_full_name=`readlink -f $src_file`
 
                 echo "cp file $real_full_name to $so_dest_dir"
                 cp $real_full_name $so_dest_dir
